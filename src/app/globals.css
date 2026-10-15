@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: var(--font-bodoni), "Bodoni Moda", Georgia, serif;
+  --font-body: var(--font-jakarta), "Plus Jakarta Sans", sans-serif;
+
+  --color-background: #111317;
+  --color-surface: #111317;
+  --color-surface-container-lowest: #0c0e12;
+  --color-surface-container-low: #1a1c20;
+  --color-surface-container: #1e2024;
+  --color-surface-container-high: #282a2e;
+  --color-surface-container-highest: #333539;
+  
+  --color-primary: #eecfa6;
+  --color-primary-container: #d1b48c;
+  --color-on-primary: #3f2d10;
+  --color-on-primary-container: #5a4526;
+  
+  --color-secondary: #e9bf97;
+  --color-secondary-container: #5e4122;
+  --color-on-secondary-container: #d6ae87;
+
+  --color-on-surface: #e2e2e8;
+  --color-on-surface-variant: #d0c5b8;
+
+  /* Aliases para compatibilidad */
+  --color-barber-dark: #111317;
+  --color-barber-panel: #1a1c20;
+  --color-barber-card: #1e2024;
+  --color-barber-border: #333539;
+  --color-barber-gold: #eecfa6;
+  --color-barber-goldHover: #e0c299;
+  --color-barber-textPrimary: #e2e2e8;
+  --color-barber-textSecondary: #d0c5b8;
+}
+
+body {
+  background-color: #111317;
+  color: #e2e2e8;
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Glassmorphism y utilidades de barbería */
+.stitch-glow {
+  box-shadow: 0 0 50px -10px rgba(238, 207, 166, 0.15);
+}
+
+.barber-panel {
+  background: linear-gradient(180deg, rgba(30, 32, 36, 0.85) 0%, rgba(17, 19, 23, 0.95) 100%);
+  border: 1px solid #333539;
+  backdrop-filter: blur(16px);
+}

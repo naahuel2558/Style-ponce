@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js build output
+/.next/
+/out/
+/build
+
+# Typescript & Environment
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env*.local
+!.env.example
+
+# Vercel
+.vercel
+
+# SQLite local databases and backups (never track operational or test databases)
+/data/*
+!/data/.gitkeep
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
