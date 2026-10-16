@@ -6,7 +6,7 @@ import {
   BEVERAGE_OPTIONS,
   BUSINESS_CONFIG,
 } from "@/lib/catalog";
-import { ServiceId, ServiceDefinition, AvailableSlot, BookingResult } from "@/types/booking";
+import { ServiceId, ServiceDefinition, AvailableSlot, BookingResult, BusinessSettings } from "@/types/booking";
 import {
   fetchAvailableSlotsAction,
   submitBookingAction,
@@ -26,13 +26,28 @@ import {
   Check,
   ShieldCheck,
   Sparkles,
+  MessageCircle,
 } from "lucide-react";
 
 interface BookingWizardProps {
   servicesConfig?: Record<ServiceId, ServiceDefinition>;
+  businessSettings?: BusinessSettings;
 }
 
-export function BookingWizard({ servicesConfig = SERVICES_CATALOG }: BookingWizardProps = {}) {
+const defaultSettings: BusinessSettings = {
+  businessName: "Style Ponce",
+  address: "Centro, Río Cuarto",
+  city: "Río Cuarto, Córdoba",
+  whatsappNumber: "3582435386",
+  openingHour: 9,
+  closingHour: 19,
+  daysOpen: [1, 2, 3, 4, 5, 6],
+};
+
+export function BookingWizard({
+  servicesConfig = SERVICES_CATALOG,
+  businessSettings = defaultSettings,
+}: BookingWizardProps = {}) {
   // Estado del flujo
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -69,10 +84,14 @@ export function BookingWizard({ servicesConfig = SERVICES_CATALOG }: BookingWiza
     ];
 
     let current = new Date(today);
-    // Empezar a buscar desde hoy
+    // Empezar a buscar desde hoy filtrando por los días configurados en el negocio
     while (dates.length < 12) {
-      if (current.getDay() !== 0) {
-        // No es domingo
+      const dayOfWeek = current.getDay();
+      const isDayOpen = businessSettings.scheduleByDay
+        ? businessSettings.scheduleByDay[dayOfWeek]?.isOpen
+        : businessSettings.daysOpen.includes(dayOfWeek);
+
+      if (isDayOpen) {
         const yyyy = current.getFullYear();
         const mm = String(current.getMonth() + 1).padStart(2, "0");
         const dd = String(current.getDate()).padStart(2, "0");
@@ -80,7 +99,7 @@ export function BookingWizard({ servicesConfig = SERVICES_CATALOG }: BookingWiza
 
         dates.push({
           dateStr,
-          labelDay: daysOfWeek[current.getDay()],
+          labelDay: daysOfWeek[dayOfWeek],
           labelDate: `${current.getDate()} ${months[current.getMonth()]}`,
         });
       }
@@ -91,7 +110,7 @@ export function BookingWizard({ servicesConfig = SERVICES_CATALOG }: BookingWiza
     if (dates.length > 0) {
       setSelectedDate(dates[0].dateStr);
     }
-  }, []);
+  }, [businessSettings.daysOpen, businessSettings.scheduleByDay]);
 
   // Cargar slots cuando cambia la fecha o el servicio
   useEffect(() => {
@@ -615,9 +634,46 @@ export function BookingWizard({ servicesConfig = SERVICES_CATALOG }: BookingWiza
               </div>
               <div className="flex justify-between">
                 <span className="text-barber-textSecondary">Dirección:</span>
-                <span className="font-medium text-barber-textPrimary">Salón Central, Buenos Aires</span>
+                <span className="font-medium text-barber-textPrimary">{businessSettings.address}, {businessSettings.city}</span>
               </div>
             </div>
+
+            {/* Botón directo de confirmación a WhatsApp */}
+            {(() => {
+              const cleanPhone = businessSettings.whatsappNumber.replace(/[^0-9]/g, "");
+              const formattedPhone = cleanPhone.startsWith("54") ? cleanPhone : `549${cleanPhone}`;
+              const dateFormatted = selectedSlot?.label ? `${selectedSlot.label} (${selectedDate})` : selectedDate;
+              const waText = encodeURIComponent(
+                `¡Hola ${businessSettings.businessName}! 👋 Acabo de reservar mi turno desde la web:\n\n` +
+                `💈 *Servicio:* ${bookingResult.data.serviceName}\n` +
+                (beverageChoice && serviceId === "combo-corte-bebida" ? `🥤 *Bebida:* ${beverageChoice === "coca-cola" ? "Coca-Cola" : "Cerveza Brahma"}\n` : "") +
+                `📅 *Horario:* ${dateFormatted}\n` +
+                `👤 *Cliente:* ${bookingResult.data.clientName}\n` +
+                `📱 *Teléfono:* ${clientPhone}\n` +
+                `💰 *Total:* $${bookingResult.data.priceArs.toLocaleString("es-AR")} ARS\n` +
+                `📍 *Dirección:* ${businessSettings.address}, ${businessSettings.city}\n` +
+                `🔑 *Código de Turno:* ${bookingResult.data.bookingId.slice(0, 8)}\n\n` +
+                `¡Muchas gracias!`
+              );
+              const whatsappUrl = `https://wa.me/${formattedPhone}?text=${waText}`;
+
+              return (
+                <div className="max-w-md mx-auto space-y-2 pt-1">
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4 fill-current" />
+                    <span>Enviar Aviso por WhatsApp</span>
+                  </a>
+                  <p className="text-[11px] text-barber-textSecondary">
+                    Hacé clic para enviar automáticamente los datos de tu turno al WhatsApp del local ({businessSettings.whatsappNumber}).
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Token y enlace de cancelación seguro */}
             <div className="max-w-md mx-auto p-4 rounded-xl bg-barber-panel border border-barber-border text-left space-y-2">

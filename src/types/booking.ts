@@ -94,3 +94,38 @@ export type BookingResult =
         fieldErrors?: Record<string, string[]>;
       };
     };
+
+export interface DaySchedule {
+  isOpen: boolean;
+  openingHour: number;
+  closingHour: number;
+}
+
+export interface BusinessSettings {
+  businessName: string;
+  address: string;
+  city: string;
+  whatsappNumber: string;
+  openingHour: number;
+  closingHour: number;
+  daysOpen: number[]; // 0: Dom, 1: Lun, 2: Mar, 3: Mié, 4: Jue, 5: Vie, 6: Sáb
+  scheduleByDay?: Record<number, DaySchedule>;
+}
+
+export const DayScheduleSchema = z.object({
+  isOpen: z.boolean(),
+  openingHour: z.number().int().min(0, "Hora de apertura inválida (0-23)").max(23, "Hora de apertura inválida (0-23)"),
+  closingHour: z.number().int().min(1, "Hora de cierre inválida (1-24)").max(24, "Hora de cierre inválida (1-24)"),
+});
+
+export const UpdateBusinessSettingsSchema = z.object({
+  businessName: z.string().trim().min(2, "El nombre debe tener al menos 2 caracteres").max(100),
+  address: z.string().trim().min(3, "La dirección debe tener al menos 3 caracteres").max(150),
+  city: z.string().trim().min(2, "La ciudad debe tener al menos 2 caracteres").max(100),
+  whatsappNumber: z.string().trim().min(8, "El número de WhatsApp debe tener al menos 8 dígitos").max(25),
+  openingHour: z.number().int().min(0).max(23).default(9),
+  closingHour: z.number().int().min(1).max(24).default(19),
+  daysOpen: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5, 6]),
+  scheduleByDay: z.record(z.coerce.number(), DayScheduleSchema).optional(),
+});
+

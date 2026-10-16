@@ -21,11 +21,18 @@ export const metadata: Metadata = {
   keywords: ["peluquería", "corte de pelo", "Style Ponce", "turnos online", "degradé", "fade", "Buenos Aires"],
 };
 
+import { getBusinessSettings } from "@/lib/db";
+import { Phone } from "lucide-react";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings = getBusinessSettings();
+  const cleanPhone = settings.whatsappNumber.replace(/[^0-9]/g, "");
+  const formattedPhone = cleanPhone.startsWith("54") ? cleanPhone : `549${cleanPhone}`;
+
   return (
     <html lang="es" className={`dark ${bodoni.variable} ${plusJakarta.variable}`}>
       <body className="min-h-screen bg-background text-on-surface font-body antialiased flex flex-col selection:bg-primary selection:text-on-primary">
@@ -35,7 +42,7 @@ export default function RootLayout({
             <Link href="/" className="flex items-center gap-3 group">
               <div className="flex flex-col">
                 <span className="font-display text-xl uppercase tracking-widest text-primary font-semibold">
-                  Style Ponce
+                  {settings.businessName}
                 </span>
                 <span className="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant">
                   Peluquería Masculina
@@ -58,13 +65,16 @@ export default function RootLayout({
               </Link>
             </nav>
 
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-container-low rounded border border-surface-container-high">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[10px] uppercase tracking-wider text-on-surface font-medium">
-                  Agenda Abierta
-                </span>
-              </div>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <a
+                href={`https://wa.me/${formattedPhone}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/50 rounded-lg border border-emerald-800/60 text-emerald-300 text-xs font-semibold transition-all"
+              >
+                <Phone className="w-3.5 h-3.5" />
+                <span>WhatsApp</span>
+              </a>
 
               <Link
                 href="#reserva"
@@ -85,7 +95,7 @@ export default function RootLayout({
           <div className="max-w-7xl mx-auto px-6 space-y-4">
             <div className="flex flex-col items-center gap-1">
               <span className="font-display text-lg uppercase tracking-widest text-primary font-semibold">
-                Style Ponce
+                {settings.businessName}
               </span>
               <span className="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant">
                 Peluquería Masculina • Atención Personalizada
@@ -93,11 +103,11 @@ export default function RootLayout({
             </div>
 
             <p className="max-w-md mx-auto text-xs text-on-surface-variant/80">
-              Atención de Lunes a Sábados de 09:00 a 19:00 hs. Turnos individuales con confirmación autoritativa en servidor. Precios en Pesos Argentinos (ARS).
+              Ubicación: {settings.address}, {settings.city} • Horario: {String(settings.openingHour).padStart(2, "0")}:00 a {String(settings.closingHour).padStart(2, "0")}:00 hs • WhatsApp: {settings.whatsappNumber}
             </p>
 
             <div className="pt-4 border-t border-surface-container/60 flex flex-wrap items-center justify-center gap-4 text-[11px] text-on-surface-variant/60">
-              <span>© {new Date().getFullYear()} Style Ponce.</span>
+              <span>© {new Date().getFullYear()} {settings.businessName}.</span>
               <span>·</span>
               <Link href="/admin" className="text-primary hover:underline font-medium">
                 Acceso Personal / Administración

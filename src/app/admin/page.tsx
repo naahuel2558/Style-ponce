@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { validateAdminSession, getAdminAppointments, getServicesConfig } from "@/lib/db";
+import { validateAdminSession, getAdminAppointments, getServicesConfig, getBusinessSettings } from "@/lib/db";
 import { AdminDashboard } from "./AdminDashboard";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +16,13 @@ export default async function AdminPage() {
 
   const appointments = getAdminAppointments();
   const servicesConfig = getServicesConfig();
+  const businessSettings = getBusinessSettings();
 
   return (
     <AdminDashboard
       initialAppointments={appointments}
       initialServicesConfig={servicesConfig}
+      initialBusinessSettings={businessSettings}
     />
   );
 }

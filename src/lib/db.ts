@@ -6,6 +6,7 @@ import {
   AppointmentRecord,
   AvailableSlot,
   BookingResult,
+  BusinessSettings,
   CreateBookingInput,
   ServiceDefinition,
   ServiceId,
@@ -66,7 +67,26 @@ export function getDatabase(): DatabaseSync {
       price_ars INTEGER NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS business_settings (
+      id TEXT PRIMARY KEY,
+      business_name TEXT NOT NULL,
+      address TEXT NOT NULL,
+      city TEXT NOT NULL,
+      whatsapp_number TEXT NOT NULL,
+      opening_hour INTEGER NOT NULL,
+      closing_hour INTEGER NOT NULL,
+      days_open TEXT NOT NULL,
+      schedule_by_day TEXT,
+      updated_at TEXT NOT NULL
+    );
   `);
+
+  try {
+    db.exec("ALTER TABLE business_settings ADD COLUMN schedule_by_day TEXT;");
+  } catch {
+    // Columna ya existe
+  }
 
   // Inicializar services_config si está vacía
   const checkServices = db.prepare("SELECT count(*) as count FROM services_config").get() as { count: number };
@@ -78,6 +98,27 @@ export function getDatabase(): DatabaseSync {
     const now = new Date().toISOString();
     insertService.run("corte-tradicional", "Corte Tradicional", 30, 10000, now);
     insertService.run("combo-corte-bebida", "Corte + Bebida", 45, 13500, now);
+  }
+
+  // Inicializar business_settings si está vacía
+  const checkSettings = db.prepare("SELECT count(*) as count FROM business_settings").get() as { count: number };
+  if (!checkSettings || checkSettings.count === 0) {
+    const insertSettings = db.prepare(`
+      INSERT INTO business_settings (id, business_name, address, city, whatsapp_number, opening_hour, closing_hour, days_open, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const now = new Date().toISOString();
+    insertSettings.run(
+      "main",
+      "Style Ponce",
+      "Centro, Río Cuarto",
+      "Río Cuarto, Córdoba",
+      "3582435386",
+      9,
+      19,
+      JSON.stringify([1, 2, 3, 4, 5, 6]),
+      now
+    );
   }
 
   dbInstance = db;
@@ -115,46 +156,55 @@ export function getAvailableSlots(dateString: string, serviceId: ServiceId): Ava
 
   const [year, month, day] = dateString.split("-").map(Number);
   const selectedDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  
-  // 0 = Domingo en JavaScript
   const dayOfWeek = selectedDate.getUTCDay();
-  if (dayOfWeek === 0) {
-    // Domingo cerrado
+  
+  // Comprobar días laborables dinámicos desde la configuración del negocio
+  const settings = getBusinessSettings();
+
+  // Comprobar si el día está abierto y obtener su horario específico de apertura y cierre
+  const daySchedule = settings.scheduleByDay?.[dayOfWeek];
+  const isDayOpen = daySchedule !== undefined ? daySchedule.isOpen : settings.daysOpen.includes(dayOfWeek);
+
+  if (!isDayOpen) {
+    // Día cerrado según configuración del local
     return [];
   }
 
-  const db = getDatabase();
-  const dayStartIso = `${dateString}T00:00:00.000Z`;
-  const dayEndIso = `${dateString}T23:59:59.999Z`;
+  const openingHour = daySchedule ? daySchedule.openingHour : settings.openingHour;
+  const closingHour = daySchedule ? daySchedule.closingHour : settings.closingHour;
 
+  if (closingHour <= openingHour) {
+    return [];
+  }
+
+  // Rango horario operativo del día en UTC (hora Argentina UTC-3)
+  const openUtcHour = openingHour + 3;
+  const closeUtcHour = closingHour + 3;
+
+  const startOfDayUtc = new Date(Date.UTC(year, month - 1, day, openUtcHour, 0, 0, 0));
+  const endOfDayUtc = new Date(Date.UTC(year, month - 1, day, closeUtcHour, 0, 0, 0));
+
+  const db = getDatabase();
   const query = db.prepare(`
     SELECT start_time, end_time FROM appointments
     WHERE barber_id = ?
       AND status = 'CONFIRMED'
-      AND start_time >= ?
-      AND start_time <= ?
+      AND start_time < ?
+      AND end_time > ?
     ORDER BY start_time ASC
   `);
 
   const confirmedRows = query.all(
     BUSINESS_CONFIG.barberId,
-    dayStartIso,
-    dayEndIso
+    endOfDayUtc.toISOString(),
+    startOfDayUtc.toISOString()
   ) as Array<{ start_time: string; end_time: string }>;
 
   const slots: AvailableSlot[] = [];
   const durationMs = service.durationMinutes * 60 * 1000;
 
-  // Generar slots de 09:00 a 19:00
-  // Para Argentina (UTC-3), las 09:00 son 12:00 UTC, y las 19:00 son 22:00 UTC
-  const openUtcHour = BUSINESS_CONFIG.openingHour + 3;
-  const closeUtcHour = BUSINESS_CONFIG.closingHour + 3;
-
   const currentNow = new Date();
   const minAllowedTime = new Date(currentNow.getTime() + BUSINESS_CONFIG.minHoursAdvance * 3600 * 1000);
-
-  const startOfDayUtc = new Date(Date.UTC(year, month - 1, day, openUtcHour, 0, 0, 0));
-  const endOfDayUtc = new Date(Date.UTC(year, month - 1, day, closeUtcHour, 0, 0, 0));
 
   let currentSlotStart = new Date(startOfDayUtc.getTime());
 
@@ -670,4 +720,165 @@ export function updateServicePrice(
     };
   }
 }
+
+/**
+ * Obtiene la configuración autoritativa del negocio (dirección, whatsapp, horarios, días)
+ */
+export function getBusinessSettings(): BusinessSettings {
+  const db = getDatabase();
+  try {
+    const row = db.prepare(`
+      SELECT business_name, address, city, whatsapp_number, opening_hour, closing_hour, days_open, schedule_by_day
+      FROM business_settings
+      WHERE id = 'main'
+    `).get() as {
+      business_name: string;
+      address: string;
+      city: string;
+      whatsapp_number: string;
+      opening_hour: number;
+      closing_hour: number;
+      days_open: string;
+      schedule_by_day?: string | null;
+    } | undefined;
+
+    if (row) {
+      let daysOpen: number[] = [1, 2, 3, 4, 5, 6];
+      try {
+        daysOpen = JSON.parse(row.days_open);
+      } catch (e) {
+        daysOpen = [1, 2, 3, 4, 5, 6];
+      }
+
+      let scheduleByDay: Record<number, { isOpen: boolean; openingHour: number; closingHour: number }> = {
+        1: { isOpen: daysOpen.includes(1), openingHour: row.opening_hour, closingHour: row.closing_hour },
+        2: { isOpen: daysOpen.includes(2), openingHour: row.opening_hour, closingHour: row.closing_hour },
+        3: { isOpen: daysOpen.includes(3), openingHour: row.opening_hour, closingHour: row.closing_hour },
+        4: { isOpen: daysOpen.includes(4), openingHour: row.opening_hour, closingHour: row.closing_hour },
+        5: { isOpen: daysOpen.includes(5), openingHour: row.opening_hour, closingHour: row.closing_hour },
+        6: { isOpen: daysOpen.includes(6), openingHour: row.opening_hour, closingHour: Math.min(row.closing_hour, 15) },
+        0: { isOpen: daysOpen.includes(0), openingHour: row.opening_hour, closingHour: row.closing_hour },
+      };
+
+      if (row.schedule_by_day) {
+        try {
+          scheduleByDay = JSON.parse(row.schedule_by_day);
+        } catch {
+          // Mantener inicializado
+        }
+      }
+
+      return {
+        businessName: row.business_name,
+        address: row.address,
+        city: row.city,
+        whatsappNumber: row.whatsapp_number,
+        openingHour: row.opening_hour,
+        closingHour: row.closing_hour,
+        daysOpen,
+        scheduleByDay,
+      };
+    }
+  } catch (err) {
+    // Silently continue to fallback
+  }
+
+  const defaultSchedule = {
+    1: { isOpen: true, openingHour: 9, closingHour: 19 },
+    2: { isOpen: true, openingHour: 9, closingHour: 19 },
+    3: { isOpen: true, openingHour: 9, closingHour: 19 },
+    4: { isOpen: true, openingHour: 9, closingHour: 19 },
+    5: { isOpen: true, openingHour: 9, closingHour: 19 },
+    6: { isOpen: true, openingHour: 9, closingHour: 14 },
+    0: { isOpen: false, openingHour: 9, closingHour: 19 },
+  };
+
+  return {
+    businessName: "Style Ponce",
+    address: "Centro, Río Cuarto",
+    city: "Río Cuarto, Córdoba",
+    whatsappNumber: "3582435386",
+    openingHour: 9,
+    closingHour: 19,
+    daysOpen: [1, 2, 3, 4, 5, 6],
+    scheduleByDay: defaultSchedule,
+  };
+}
+
+/**
+ * Actualiza la configuración del negocio con auditoría
+ */
+export function updateBusinessSettings(
+  settings: BusinessSettings
+): { success: boolean; message: string } {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  const scheduleByDay = settings.scheduleByDay;
+  const computedDaysOpen = scheduleByDay
+    ? Object.entries(scheduleByDay)
+        .filter(([_, v]) => v.isOpen)
+        .map(([k]) => Number(k))
+    : settings.daysOpen;
+
+  const scheduleByDayJson = scheduleByDay ? JSON.stringify(scheduleByDay) : null;
+
+  try {
+    const stmt = db.prepare(`
+      UPDATE business_settings
+      SET business_name = ?,
+          address = ?,
+          city = ?,
+          whatsapp_number = ?,
+          opening_hour = ?,
+          closing_hour = ?,
+          days_open = ?,
+          schedule_by_day = ?,
+          updated_at = ?
+      WHERE id = 'main'
+    `);
+    const res = stmt.run(
+      settings.businessName,
+      settings.address,
+      settings.city,
+      settings.whatsappNumber,
+      settings.openingHour,
+      settings.closingHour,
+      JSON.stringify(computedDaysOpen),
+      scheduleByDayJson,
+      now
+    );
+
+    if (res.changes === 0) {
+      const insert = db.prepare(`
+        INSERT INTO business_settings (id, business_name, address, city, whatsapp_number, opening_hour, closing_hour, days_open, schedule_by_day, updated_at)
+        VALUES ('main', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      insert.run(
+        settings.businessName,
+        settings.address,
+        settings.city,
+        settings.whatsappNumber,
+        settings.openingHour,
+        settings.closingHour,
+        JSON.stringify(computedDaysOpen),
+        scheduleByDayJson,
+        now
+      );
+    }
+
+    recordAdminAudit("UPDATE_BUSINESS_CONFIG", "main", "CONFIG_UPDATED");
+
+    return {
+      success: true,
+      message: "Configuración del negocio guardada correctamente.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error de base de datos al guardar la configuración.",
+    };
+  }
+}
+
 

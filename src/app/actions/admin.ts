@@ -9,9 +9,11 @@ import {
   validateAdminSession,
   cancelAppointmentByAdmin,
   updateServicePrice,
+  getBusinessSettings,
+  updateBusinessSettings,
   AdminCancellationReason,
 } from "@/lib/db";
-import { ServiceId } from "@/types/booking";
+import { ServiceId, BusinessSettings, UpdateBusinessSettingsSchema } from "@/types/booking";
 
 const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -106,4 +108,33 @@ export async function updateServicePriceAction(
   }
   return res;
 }
+
+/**
+ * Modificación autorizada de la configuración del negocio (dirección, whatsapp, horarios, días)
+ */
+export async function updateBusinessSettingsAction(settings: BusinessSettings) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_session")?.value;
+
+  // Verificación estricta en servidor
+  if (!validateAdminSession(token)) {
+    return { success: false, message: "No autorizado. Sesión vencida o inválida." };
+  }
+
+  const validation = UpdateBusinessSettingsSchema.safeParse(settings);
+  if (!validation.success) {
+    return {
+      success: false,
+      message: validation.error.issues[0]?.message || "Datos de configuración inválidos.",
+    };
+  }
+
+  const res = updateBusinessSettings(validation.data);
+  if (res.success) {
+    revalidatePath("/admin");
+    revalidatePath("/");
+  }
+  return res;
+}
+
 

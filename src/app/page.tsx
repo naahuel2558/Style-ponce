@@ -1,5 +1,6 @@
 import { BookingWizard } from "@/components/BookingWizard";
-import { getServicesConfig } from "@/lib/db";
+import { WhatsAppFloat } from "@/components/WhatsAppFloat";
+import { getServicesConfig, getBusinessSettings } from "@/lib/db";
 import {
   Scissors,
   Clock,
@@ -10,12 +11,15 @@ import {
   ArrowRight,
   Award,
   Sparkle,
+  MapPin,
+  Phone,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   const servicesConfig = getServicesConfig();
+  const businessSettings = getBusinessSettings();
   const cortePrice = servicesConfig["corte-tradicional"]?.priceArs || 10000;
   const comboPrice = servicesConfig["combo-corte-bebida"]?.priceArs || 13500;
   return (
@@ -355,10 +359,21 @@ export default function HomePage() {
           <p className="text-xs sm:text-sm text-on-surface-variant max-w-md mx-auto">
             Elegí el servicio, seleccioná fecha y horario libre y confirmá tu turno con tus datos.
           </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-primary/90 pt-1">
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5" />
+              {businessSettings.address}, {businessSettings.city}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              {String(businessSettings.openingHour).padStart(2, "0")}:00 a {String(businessSettings.closingHour).padStart(2, "0")}:00 hs
+            </span>
+          </div>
         </div>
 
         <div className="px-4">
-          <BookingWizard servicesConfig={servicesConfig} />
+          <BookingWizard servicesConfig={servicesConfig} businessSettings={businessSettings} />
         </div>
       </section>
 
@@ -431,6 +446,12 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Botón flotante de contacto directo a WhatsApp */}
+      <WhatsAppFloat
+        whatsappNumber={businessSettings.whatsappNumber}
+        businessName={businessSettings.businessName}
+      />
     </div>
   );
 }
